@@ -100,9 +100,6 @@ INLINE void transpose_msg_vecs(const uint8_t *const *inputs,
   out[13] = _mm256_loadu_si256((__m256i const *)&inputs[5][block_offset + 1 * sizeof(__m256i)]);
   out[14] = _mm256_loadu_si256((__m256i const *)&inputs[6][block_offset + 1 * sizeof(__m256i)]);
   out[15] = _mm256_loadu_si256((__m256i const *)&inputs[7][block_offset + 1 * sizeof(__m256i)]);
-  for (size_t i = 0; i < 8; ++i) {
-    _mm_prefetch(&inputs[i][block_offset + 256], _MM_HINT_T0);
-  }
   transpose_vecs(&out[0]);
   transpose_vecs(&out[8]);
 }
@@ -120,67 +117,62 @@ INLINE void load_counters(uint64_t counter, bool increment_counter,
   *out_hi = h;
 }
 
-void blake3_hash8_avx2(const uint8_t *const *inputs, size_t blocks,
+static void blake3_hash8_avx2(const uint8_t *const *inputs, size_t blocks,
                        const uint32_t key[8], uint64_t counter,
-                       bool increment_counter, uint8_t flags,
-                       uint8_t flags_start, uint8_t flags_end, uint8_t *out) {
-  __m256i h_vecs[8] = {
-      _mm256_set1_epi32(key[0]), _mm256_set1_epi32(key[1]), 
-      _mm256_set1_epi32(key[2]), _mm256_set1_epi32(key[3]),
-      _mm256_set1_epi32(key[4]), _mm256_set1_epi32(key[5]), 
-      _mm256_set1_epi32(key[6]), _mm256_set1_epi32(key[7]),
-  };
-  __m256i counter_low_vec, counter_high_vec;
-  load_counters(counter, increment_counter, &counter_low_vec,
-                &counter_high_vec);
-  // uint8_t block_flags = flags | flags_start;
-  __m256i flags_      = _mm256_set1_epi32(flags);
-  __m256i block_flags = _mm256_set1_epi32(flags | flags_start);
-  __m256i block_end   = _mm256_set1_epi32(flags_end);
-  __m256i block_len   = _mm256_set1_epi32(BLAKE3_BLOCK_LEN);
-
+                       bool increment_counter, uint32_t flags,
+                       uint32_t flags_start, uint32_t flags_end, uint8_t *out) {
+  __m256i v[16], m[16];
+  __m256i cl, ch;
+  uint32_t block_flags = flags | flags_start;
+  
+  for(size_t i = 0; i < 8; ++i) {
+    v[i] = _mm256_set1_epi32(key[i]);
+  }
+  load_counters(counter, increment_counter, &cl, &ch);
+  
   for (size_t block = 0; block < blocks; block++) {
     if (block + 1 == blocks) {
-      // block_flags |= flags_end;
-      block_flags = _mm256_or_si256(block_flags, block_end);
+      block_flags |= flags_end;
     }
-    __m256i msg_vecs[16];
-    transpose_msg_vecs(inputs, block * BLAKE3_BLOCK_LEN, msg_vecs);
+    transpose_msg_vecs(inputs, block * BLAKE3_BLOCK_LEN, m);
 
-    __m256i v[16] = {
-        h_vecs[0],       h_vecs[1],        h_vecs[2],     h_vecs[3],
-        h_vecs[4],       h_vecs[5],        h_vecs[6],     h_vecs[7],
-        _mm256_set1_epi32(IV[0]), _mm256_set1_epi32(IV[1]), _mm256_set1_epi32(IV[2]), _mm256_set1_epi32(IV[3]),
-        counter_low_vec, counter_high_vec, block_len, block_flags,
-    };
-    round_fn(v, msg_vecs, 0);
-    round_fn(v, msg_vecs, 1);
-    round_fn(v, msg_vecs, 2);
-    round_fn(v, msg_vecs, 3);
-    round_fn(v, msg_vecs, 4);
-    round_fn(v, msg_vecs, 5);
-    round_fn(v, msg_vecs, 6);
-    h_vecs[0] = _mm256_xor_si256(v[0], v[ 8]);
-    h_vecs[1] = _mm256_xor_si256(v[1], v[ 9]);
-    h_vecs[2] = _mm256_xor_si256(v[2], v[10]);
-    h_vecs[3] = _mm256_xor_si256(v[3], v[11]);
-    h_vecs[4] = _mm256_xor_si256(v[4], v[12]);
-    h_vecs[5] = _mm256_xor_si256(v[5], v[13]);
-    h_vecs[6] = _mm256_xor_si256(v[6], v[14]);
-    h_vecs[7] = _mm256_xor_si256(v[7], v[15]);
+    for (size_t i = 0; i < 8; ++i) {
+      _mm_prefetch(&inputs[i][block * BLAKE3_BLOCK_LEN + 256], _MM_HINT_T0);
+    }
 
-    block_flags = flags_;
+    v[ 8] = _mm256_set1_epi32(IV[0]);
+    v[ 9] = _mm256_set1_epi32(IV[1]);
+    v[10] = _mm256_set1_epi32(IV[2]);
+    v[11] = _mm256_set1_epi32(IV[3]);
+    v[12] = cl;
+    v[13] = ch;
+    v[14] = _mm256_set1_epi32(BLAKE3_BLOCK_LEN);
+    v[15] = _mm256_set1_epi32(block_flags);
+
+    round_fn(v, m, 0);
+    round_fn(v, m, 1);
+    round_fn(v, m, 2);
+    round_fn(v, m, 3);
+    round_fn(v, m, 4);
+    round_fn(v, m, 5);
+    round_fn(v, m, 6);
+
+    for(size_t i = 0; i < 8; ++i) {
+      v[i] = _mm256_xor_si256(v[i], v[i+8]);
+    }
+
+    block_flags = flags;
   }
 
-  transpose_vecs(h_vecs);
-  _mm256_storeu_si256((__m256i *)&out[0 * sizeof(__m256i)], h_vecs[0]);
-  _mm256_storeu_si256((__m256i *)&out[1 * sizeof(__m256i)], h_vecs[1]);
-  _mm256_storeu_si256((__m256i *)&out[2 * sizeof(__m256i)], h_vecs[2]);
-  _mm256_storeu_si256((__m256i *)&out[3 * sizeof(__m256i)], h_vecs[3]);
-  _mm256_storeu_si256((__m256i *)&out[4 * sizeof(__m256i)], h_vecs[4]);
-  _mm256_storeu_si256((__m256i *)&out[5 * sizeof(__m256i)], h_vecs[5]);
-  _mm256_storeu_si256((__m256i *)&out[6 * sizeof(__m256i)], h_vecs[6]);
-  _mm256_storeu_si256((__m256i *)&out[7 * sizeof(__m256i)], h_vecs[7]);
+  transpose_vecs(v);
+  _mm256_storeu_si256((__m256i *)&out[0 * sizeof(__m256i)], v[0]);
+  _mm256_storeu_si256((__m256i *)&out[1 * sizeof(__m256i)], v[1]);
+  _mm256_storeu_si256((__m256i *)&out[2 * sizeof(__m256i)], v[2]);
+  _mm256_storeu_si256((__m256i *)&out[3 * sizeof(__m256i)], v[3]);
+  _mm256_storeu_si256((__m256i *)&out[4 * sizeof(__m256i)], v[4]);
+  _mm256_storeu_si256((__m256i *)&out[5 * sizeof(__m256i)], v[5]);
+  _mm256_storeu_si256((__m256i *)&out[6 * sizeof(__m256i)], v[6]);
+  _mm256_storeu_si256((__m256i *)&out[7 * sizeof(__m256i)], v[7]);
 }
 
 #if !defined(BLAKE3_NO_SSE41)
