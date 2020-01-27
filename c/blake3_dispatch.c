@@ -141,7 +141,7 @@ enum cpu_feature {
 #if !defined(BLAKE3_TESTING)
 static /* Allow the variable to be controlled manually for testing */
 #endif
-    enum cpu_feature g_cpu_features = UNDEFINED;
+    enum cpu_feature g_cpu_features = 0;
 
 #if !defined(BLAKE3_TESTING)
 static
