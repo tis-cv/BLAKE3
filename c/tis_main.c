@@ -9,8 +9,6 @@
 #include "blake3.h"
 #include "blake3_impl.h"
 
-#define INPUT_LEN 1023
-
 #define HASH_MODE 0
 #define KEYED_HASH_MODE 1
 #define DERIVE_KEY_MODE 2
