@@ -3,8 +3,6 @@
 #include <unistd.h>
 #include <assert.h>
 
-#define INPUT_LEN 1023
-
 char* argv[5];
 char arg_length[] = "--length";
 char arg_length_val[] = "131"; // is independent from input length
