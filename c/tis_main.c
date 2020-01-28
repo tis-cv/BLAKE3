@@ -124,6 +124,7 @@ int main(int argc, char **argv) {
 #else
   size_t buf_len = 1023;
   assert(buf_len < buf_capacity);  
+  uint8_t i = 0;
   int j = 0;
   while (j < buf_len){
     buf[j++] = i;
