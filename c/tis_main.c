@@ -106,9 +106,12 @@ int main(int argc, char **argv) {
    * This is just for test cases, so go ahead and assume that the input is less
    * than 1 MiB. 
    */
+  
   size_t buf_capacity = 1 << 20;
   uint8_t *buf = malloc(buf_capacity);
   assert(buf != NULL);
+
+#ifndef TRUSTINSOFT
   size_t buf_len = 0;
   while (1) {
     size_t n = fread(&buf[buf_len], 1, buf_capacity - buf_len, stdin);
@@ -118,7 +121,16 @@ int main(int argc, char **argv) {
     buf_len += n;
     assert(buf_len < buf_capacity);
   }
-
+#elif
+  size_t buf_len = 1023;
+  assert(buf_len < buf_capacity);  
+  int j = 0;
+  while (j < buf_len){
+    buf[j++] = i;
+    i = (i+1) % 251;
+  }  
+#endif
+  
   const int mask = get_cpu_features();
   int feature = 0;
   do {
