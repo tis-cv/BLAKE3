@@ -11,7 +11,14 @@ char arg_keyed_val[] = "77686174732074686520456c7669736820776f726420666f72206672
 char arg_derive_key[] = "--derive-key";
 char arg_derive_key_val[] = "BLAKE3 2019-12-27 16:29:52 test vectors context"; // is independent from input length
 
-extern int tis_main(int argc, char* argv[]);
+int __builtin_popcountll(unsigned long long x) {
+  int count = 0;
+  while (x) {
+    if (x & 1ULL) count++;
+    x >>=1;
+  }
+  return count;
+}
 
 void test() {
 
@@ -39,7 +46,7 @@ void test() {
   	argv[4] = arg_length_val;
 	main(5, argv);
 
-    // Test the default derive key.
+    	// Test the default derive key.
 	printf("Test the default derive key.");
 	argv[1] = arg_derive_key;
   	argv[2] = arg_derive_key_val;
