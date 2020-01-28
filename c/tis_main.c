@@ -122,7 +122,7 @@ int main(int argc, char **argv) {
     assert(buf_len < buf_capacity);
   }
 #else
-  size_t buf_len = 1023;
+  size_t buf_len = INPUT_LEN;
   assert(buf_len < buf_capacity);  
   uint8_t i = 0;
   int j = 0;
