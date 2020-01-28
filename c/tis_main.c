@@ -121,7 +121,7 @@ int main(int argc, char **argv) {
     buf_len += n;
     assert(buf_len < buf_capacity);
   }
-#elif
+#else
   size_t buf_len = 1023;
   assert(buf_len < buf_capacity);  
   int j = 0;
